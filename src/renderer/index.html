@@ -2,6 +2,8 @@
 <html lang="tr">
   <head>
     <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="AI Kadrom: hedefini uzman karakterlere dağıtan, düzenlenebilir çıktılar üreten kişisel yapay zekâ ekibi demosu." />
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self' blob: data:; connect-src 'self'" />
     <title>AI Kadrom</title>
     <link rel="stylesheet" href="style.css" />
@@ -164,6 +166,55 @@
           <button type="submit" class="birincil">Kaydet</button>
         </footer>
       </form>
+    </div>
+
+    <div id="kadroEditor" class="kadro-editor-arka" role="dialog" aria-modal="true" aria-labelledby="kadroEditorBaslik" hidden>
+      <section class="kadro-editor">
+        <header class="kadro-editor-ust">
+          <div>
+            <h2 id="kadroEditorBaslik">Kadronu düzenle</h2>
+            <p>Hazır karakterleri sahnede tut veya kendi uzmanını ekle.</p>
+          </div>
+          <button type="button" class="kadro-editor-buton" id="kadroEditorKapat" aria-label="Kadro düzenleyiciyi kapat">×</button>
+        </header>
+
+        <div class="kadro-editor-govde">
+          <section aria-labelledby="hazirKadroBaslik">
+            <h3 id="hazirKadroBaslik">Hazır ekip</h3>
+            <p>Pasif yaptığın karakter sahneden gizlenir; daha sonra yeniden açabilirsin.</p>
+            <div id="hazirAjanListesi" class="kadro-editor-listesi"></div>
+          </section>
+
+          <section aria-labelledby="ozelAjanBaslik">
+            <h3 id="ozelAjanBaslik">Yeni karakter</h3>
+            <div class="kadro-editor-form">
+              <label for="ozelAjanAdi">Ad
+                <input id="ozelAjanAdi" maxlength="32" autocomplete="off" placeholder="ör. Deniz" />
+              </label>
+              <label for="ozelAjanRolu">Rol
+                <input id="ozelAjanRolu" maxlength="100" autocomplete="off" placeholder="ör. Müşteri araştırmacısı" />
+              </label>
+              <fieldset>
+                <legend>Hazır skill etiketleri</legend>
+                <label><input type="checkbox" name="ozelSkill" value="Ürün analizi" /> Ürün analizi</label>
+                <label><input type="checkbox" name="ozelSkill" value="Sosyal içerik" /> Sosyal içerik</label>
+                <label><input type="checkbox" name="ozelSkill" value="Takvim planlama" /> Takvim planlama</label>
+              </fieldset>
+              <label for="ozelSkillMetni">Özel skill manifesti
+                <textarea id="ozelSkillMetni" rows="3" maxlength="500" placeholder="Her satıra bir skill etiketi yaz. Bu web demosu kod çalıştırmaz."></textarea>
+              </label>
+              <button type="button" id="ozelAjanEkle" class="kadro-editor-buton birincil">Karakteri ekle</button>
+            </div>
+            <div id="ozelAjanListesi" class="kadro-editor-listesi"></div>
+          </section>
+        </div>
+
+        <p id="kadroEditorDurum" class="kadro-editor-durum" role="status" aria-live="polite"></p>
+        <footer class="kadro-editor-eylemler">
+          <button type="button" id="kadroEditorSifirla" class="kadro-editor-buton">Varsayılana dön</button>
+          <button type="button" id="kadroEditorKaydet" class="kadro-editor-buton birincil">Kaydet ve sahneye dön</button>
+        </footer>
+      </section>
     </div>
 
     <script type="module" src="app.js"></script>

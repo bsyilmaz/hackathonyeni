@@ -610,6 +610,357 @@ export function gorselBildirim(o) {
   return b;
 }
 
+// ---------------- Lansman paketi: paylaşım, görsel ve plan ----------------
+// Web demosu bu tek çekmeceyi kullanır. Electron tarafı da aynı veri şemasıyla
+// çağırabilir; DOM index.html'de yoksa burada oluşturulur.
+let paketDugumu = null;
+let paketKapanmaZamani = null;
+let paketEscapeKuruldu = false;
+
+const VARSAYILAN_PAYLASIM = `Meet AI Kadrom: one goal, a coordinated team, and launch-ready work you can actually edit.
+
+Defne coordinates the brief, Kerem checks the product facts, Mert prepares the story and visual, and Elif turns it into a practical launch plan.
+
+Built for solo founders who want to move from intention to a consistent launch package without giving up control.`;
+
+function paketMetinListesi(deger) {
+  if (!deger) return [];
+  return (Array.isArray(deger) ? deger : [deger])
+    .map((x) => (typeof x === 'string' ? x : x?.baslik || x?.ad || ''))
+    .map((x) => x.trim())
+    .filter(Boolean);
+}
+
+function paketVerisiniDuzenle(veri = {}) {
+  const paylasim = typeof veri.paylasim === 'string' ? { metin: veri.paylasim } : veri.paylasim || {};
+  const gorsel = typeof veri.gorsel === 'string' ? { src: veri.gorsel } : veri.gorsel || {};
+  const hamPlan = Array.isArray(veri.plan) ? veri.plan : veri.plan?.adimlar || veri.adimlar || [];
+  const revizyon = veri.revizyon || {};
+  return {
+    surum: String(veri.surum || veri.versiyon || 'v1'),
+    paylasim: {
+      metin: String(paylasim.metin || veri.metin || VARSAYILAN_PAYLASIM),
+    },
+    gorsel: {
+      src: gorsel.src || gorsel.url || gorsel.svg || '',
+      alt: String(gorsel.alt || 'AI Kadrom lansman görseli'),
+      dosyaAdi: String(gorsel.dosyaAdi || gorsel.dosya || 'ai-kadrom-lansman.svg'),
+      baslik: String(gorsel.baslik || 'AI KADROM'),
+    },
+    plan: hamPlan.map((p, i) => {
+      if (typeof p === 'string') return { tarih: `Adım ${i + 1}`, baslik: p, detay: '', tamam: false };
+      return {
+        tarih: String(p.tarih || p.zaman || `Adım ${i + 1}`),
+        baslik: String(p.baslik || p.ad || p.metin || `Hazırlık ${i + 1}`),
+        detay: String(p.detay || p.aciklama || ''),
+        tamam: !!p.tamam,
+        baslangic: p.baslangic || p.baslangicISO || p.iso || '',
+        bitis: p.bitis || p.bitisISO || '',
+      };
+    }),
+    revizyon: {
+      degisti: paketMetinListesi(revizyon.degisti || revizyon.degisen || veri.degisti || veri.degisen),
+      korundu: paketMetinListesi(revizyon.korundu || revizyon.korunan || veri.korundu || veri.korunan),
+    },
+    acikSekme: ['paylasim', 'gorsel', 'plan'].includes(veri.acikSekme) ? veri.acikSekme : null,
+  };
+}
+
+function varsayilanPaketGorseli(baslik) {
+  const temizBaslik = String(baslik || 'AI KADROM').replace(/[<>&"']/g, '').slice(0, 34);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 675" role="img" aria-label="AI Kadrom lansman afişi">
+  <rect width="1200" height="675" fill="#fff6e6"/>
+  <path d="M0 0h430v675H0z" fill="#a8323e"/>
+  <path d="M430 0h24v675h-24z" fill="#141a2b"/>
+  <circle cx="216" cy="188" r="108" fill="#ffc43d" stroke="#141a2b" stroke-width="12"/>
+  <path d="M114 421h205v36H114zm42-64h205v36H156zm42-64h205v36H198z" fill="#fff6e6" stroke="#141a2b" stroke-width="9"/>
+  <text x="520" y="238" fill="#22304f" font-family="Arial, sans-serif" font-size="42" font-weight="700" letter-spacing="5">SOLO FOUNDER'S</text>
+  <text x="520" y="340" fill="#141a2b" font-family="Arial, sans-serif" font-size="88" font-weight="900">${temizBaslik}</text>
+  <path d="M520 390h568" stroke="#141a2b" stroke-width="12"/>
+  <text x="520" y="468" fill="#22304f" font-family="Arial, sans-serif" font-size="35" font-weight="700">ONE GOAL. ONE COORDINATED CREW.</text>
+  <g fill="#ffc43d" stroke="#141a2b" stroke-width="8">
+    <circle cx="548" cy="560" r="26"/><circle cx="628" cy="560" r="26"/><circle cx="708" cy="560" r="26"/>
+    <circle cx="788" cy="560" r="26"/><circle cx="868" cy="560" r="26"/><circle cx="948" cy="560" r="26"/>
+  </g>
+</svg>`;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
+function paketGorselKaynagi(gorsel) {
+  const kaynak = String(gorsel.src || '').trim();
+  if (!kaynak) return varsayilanPaketGorseli(gorsel.baslik);
+  if (kaynak.startsWith('<svg')) return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(kaynak)}`;
+  if (/^(data:image\/(?:svg\+xml|png|jpe?g|webp|gif);|blob:|https?:\/\/|\.?\.?\/|\/)/i.test(kaynak)) return kaynak;
+  return varsayilanPaketGorseli(gorsel.baslik);
+}
+
+function guvenliDosyaAdi(ad, varsayilan) {
+  const temiz = String(ad || '').replace(/[\\/:*?"<>|]+/g, '-').trim();
+  return temiz || varsayilan;
+}
+
+function dosyaIndir(href, dosyaAdi) {
+  const a = document.createElement('a');
+  a.href = href;
+  a.download = dosyaAdi;
+  a.rel = 'noopener';
+  document.body.append(a);
+  a.click();
+  a.remove();
+}
+
+async function panoyaYaz(metin) {
+  if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(metin);
+  const alan = el('textarea');
+  alan.value = metin;
+  alan.style.position = 'fixed';
+  alan.style.left = '-9999px';
+  document.body.append(alan);
+  alan.select();
+  const basarili = document.execCommand('copy');
+  alan.remove();
+  if (!basarili) throw new Error('Kopyalanamadı');
+}
+
+const icsKacir = (metin) => String(metin || '').replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/;/g, '\\;').replace(/,/g, '\\,');
+const icsTarih = (deger) => {
+  const d = new Date(deger);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
+};
+
+function planIcsIndir(plan) {
+  const damga = icsTarih(new Date());
+  const satirlar = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//AI Kadrom//Lansman Plani//TR', 'CALSCALE:GREGORIAN'];
+  plan.forEach((p, i) => {
+    const son = icsTarih(p.bitis || p.baslangic);
+    satirlar.push('BEGIN:VTODO', `UID:ai-kadrom-${Date.now()}-${i}@demo.local`, `DTSTAMP:${damga}`, `SUMMARY:${icsKacir(p.baslik)}`);
+    if (p.detay || p.tarih) satirlar.push(`DESCRIPTION:${icsKacir([p.tarih, p.detay].filter(Boolean).join(' · '))}`);
+    if (son) satirlar.push(`DUE:${son}`);
+    satirlar.push(`STATUS:${p.tamam ? 'COMPLETED' : 'NEEDS-ACTION'}`, 'END:VTODO');
+  });
+  satirlar.push('END:VCALENDAR');
+  const url = URL.createObjectURL(new Blob([`${satirlar.join('\r\n')}\r\n`], { type: 'text/calendar;charset=utf-8' }));
+  dosyaIndir(url, 'ai-kadrom-lansman-plani.ics');
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function paketOlayi(ad, detay) {
+  document.dispatchEvent(new CustomEvent(`lansman-paketi:${ad}`, { detail: detay }));
+}
+
+function paketRevizyonOzeti(revizyon) {
+  if (!revizyon.degisti.length && !revizyon.korundu.length) return null;
+  const alan = el('section', 'paket-revizyon');
+  alan.setAttribute('aria-label', 'Revizyon özeti');
+  alan.append(el('h3', '', 'Revizyon özeti'));
+  const liste = el('dl');
+  if (revizyon.degisti.length) {
+    liste.append(el('dt', 'degisti', 'Değişti'), el('dd', '', revizyon.degisti.join(' · ')));
+  }
+  if (revizyon.korundu.length) {
+    liste.append(el('dt', 'korundu', 'Korundu'), el('dd', '', revizyon.korundu.join(' · ')));
+  }
+  alan.append(liste);
+  return alan;
+}
+
+export function lansmanPaketiKapat() {
+  if (!paketDugumu) return;
+  paketDugumu.classList.add('kapaniyor');
+  document.body.classList.remove('paket-acik');
+  clearTimeout(paketKapanmaZamani);
+  paketKapanmaZamani = setTimeout(() => {
+    paketDugumu?.remove();
+    paketDugumu = null;
+  }, 180);
+}
+
+export function lansmanPaketiGoster(veri = {}) {
+  const paket = paketVerisiniDuzenle(veri);
+  clearTimeout(paketKapanmaZamani);
+  const yeni = !paketDugumu;
+  if (!paketDugumu) {
+    paketDugumu = el('aside', 'lansman-paketi');
+    paketDugumu.id = 'lansman-paketi';
+    paketDugumu.setAttribute('aria-label', 'Lansman paketi');
+    document.body.append(paketDugumu);
+  }
+  paketDugumu.classList.remove('kapaniyor');
+  paketDugumu.innerHTML = '';
+  document.body.classList.add('paket-acik');
+
+  const ust = el('header', 'paket-ust');
+  const basliklar = el('div');
+  basliklar.append(el('h2', '', `Lansman paketi · ${paket.surum}`), el('p', '', 'Düzenle, indir, son kararı sen ver.'));
+  const kapat = el('button', 'paket-kapat', 'Kapat');
+  kapat.type = 'button';
+  kapat.onclick = lansmanPaketiKapat;
+  ust.append(basliklar, kapat);
+
+  const sekmeler = el('div', 'paket-sekmeler');
+  sekmeler.setAttribute('role', 'tablist');
+  sekmeler.setAttribute('aria-label', 'Paket çıktıları');
+  const sayfa = el('div', 'paket-sayfa');
+  sayfa.setAttribute('role', 'tabpanel');
+  const sekmeBilgileri = [
+    ['paylasim', 'Paylaşım'],
+    ['gorsel', 'Görsel'],
+    ['plan', 'Plan'],
+  ];
+  let acikSekme = paket.acikSekme || paketDugumu.dataset.acikSekme || 'paylasim';
+
+  const durumYaz = (metin, hata = false) => {
+    let d = sayfa.querySelector('.paket-durum');
+    if (!d) {
+      d = el('span', 'paket-durum');
+      d.setAttribute('aria-live', 'polite');
+      sayfa.append(d);
+    }
+    d.textContent = metin;
+    d.classList.toggle('hata', hata);
+  };
+
+  const paylasimiCiz = () => {
+    sayfa.append(el('h3', '', 'İngilizce LinkedIn paylaşımı'));
+    const alan = el('textarea', 'paket-paylasim');
+    alan.value = paket.paylasim.metin;
+    alan.rows = 12;
+    alan.setAttribute('aria-label', 'İngilizce LinkedIn paylaşımı');
+    alan.addEventListener('input', () => {
+      paket.paylasim.metin = alan.value;
+      paketOlayi('paylasim-degisti', { metin: alan.value, surum: paket.surum });
+    });
+    const alt = el('div', 'paket-eylemler');
+    const not = el('small', '', 'Metin burada düzenlenebilir; otomatik yayımlanmaz.');
+    const kopyala = el('button', 'paket-buton birincil', 'Metni kopyala');
+    kopyala.type = 'button';
+    kopyala.onclick = async () => {
+      try {
+        await panoyaYaz(alan.value);
+        durumYaz('Metin panoya kopyalandı.');
+        paketOlayi('paylasim-kopyalandi', { metin: alan.value, surum: paket.surum });
+      } catch {
+        durumYaz('Kopyalama izni verilmedi. Metni seçip kopyalayabilirsin.', true);
+      }
+    };
+    alt.append(not, kopyala);
+    sayfa.append(alan, alt);
+  };
+
+  const gorseliCiz = () => {
+    sayfa.append(el('h3', '', 'Tanıtım görseli'));
+    const kaynak = paketGorselKaynagi(paket.gorsel);
+    const sekil = el('figure', 'paket-gorsel');
+    const img = el('img');
+    img.src = kaynak;
+    img.alt = paket.gorsel.alt;
+    sekil.append(img, el('figcaption', '', 'Mert’in hazırladığı sabit görsel çıktısı'));
+    const alt = el('div', 'paket-eylemler');
+    alt.append(el('small', '', 'Revizyonda korunabilir ve yeniden üretilmeden indirilebilir.'));
+    const indir = el('button', 'paket-buton birincil', 'SVG’yi indir');
+    indir.type = 'button';
+    indir.onclick = () => {
+      dosyaIndir(kaynak, guvenliDosyaAdi(paket.gorsel.dosyaAdi, 'ai-kadrom-lansman.svg'));
+      durumYaz('Görsel indirmeye hazırlandı.');
+      paketOlayi('gorsel-indirildi', { surum: paket.surum });
+    };
+    alt.append(indir);
+    sayfa.append(sekil, alt);
+  };
+
+  const planiCiz = () => {
+    sayfa.append(el('h3', '', 'Lansman planı'));
+    if (!paket.plan.length) {
+      sayfa.append(el('p', 'paket-bos', 'Plan adımları birazdan burada görünecek.'));
+      return;
+    }
+    const liste = el('ol', 'paket-plan-listesi');
+    paket.plan.forEach((p, i) => {
+      const oge = el('li');
+      const isaret = el('input');
+      isaret.type = 'checkbox';
+      isaret.checked = p.tamam;
+      isaret.setAttribute('aria-label', `${p.baslik} tamamlandı`);
+      isaret.onchange = () => {
+        p.tamam = isaret.checked;
+        oge.classList.toggle('tamam', p.tamam);
+        paketOlayi('plan-degisti', { sira: i, tamam: p.tamam, surum: paket.surum });
+      };
+      const yazi = el('div');
+      const zaman = el('time', '', p.tarih);
+      const baslik = el('strong', '', p.baslik);
+      yazi.append(zaman, baslik);
+      if (p.detay) yazi.append(el('p', '', p.detay));
+      oge.classList.toggle('tamam', p.tamam);
+      oge.append(isaret, yazi);
+      liste.append(oge);
+    });
+    const alt = el('div', 'paket-eylemler');
+    alt.append(el('small', '', 'Takvim dosyası görevleri ve varsa tarihleri içerir.'));
+    const indir = el('button', 'paket-buton birincil', 'Takvim dosyasını indir');
+    indir.type = 'button';
+    indir.onclick = () => {
+      planIcsIndir(paket.plan);
+      durumYaz('Plan .ics dosyası olarak hazırlandı.');
+      paketOlayi('plan-indirildi', { surum: paket.surum });
+    };
+    alt.append(indir);
+    sayfa.append(liste, alt);
+  };
+
+  const sekmeyiAc = (ad, odakla = false) => {
+    acikSekme = ad;
+    paketDugumu.dataset.acikSekme = ad;
+    sayfa.innerHTML = '';
+    sekmeler.querySelectorAll('[role="tab"]').forEach((btn) => {
+      const secili = btn.dataset.sekme === ad;
+      btn.classList.toggle('secili', secili);
+      btn.setAttribute('aria-selected', String(secili));
+      btn.tabIndex = secili ? 0 : -1;
+      if (secili && odakla) btn.focus();
+    });
+    if (ad === 'gorsel') gorseliCiz();
+    else if (ad === 'plan') planiCiz();
+    else paylasimiCiz();
+    paketOlayi('sekme', { sekme: ad, surum: paket.surum });
+  };
+
+  sekmeBilgileri.forEach(([ad, etiket], i) => {
+    const btn = el('button', '', etiket);
+    btn.type = 'button';
+    btn.dataset.sekme = ad;
+    btn.id = `paket-sekme-${ad}`;
+    btn.setAttribute('role', 'tab');
+    btn.setAttribute('aria-controls', 'paket-sayfa');
+    btn.onclick = () => sekmeyiAc(ad);
+    btn.onkeydown = (e) => {
+      if (!['ArrowLeft', 'ArrowRight'].includes(e.key)) return;
+      e.preventDefault();
+      const yon = e.key === 'ArrowRight' ? 1 : -1;
+      const sonraki = sekmeBilgileri[(i + yon + sekmeBilgileri.length) % sekmeBilgileri.length][0];
+      sekmeyiAc(sonraki, true);
+    };
+    sekmeler.append(btn);
+  });
+  sayfa.id = 'paket-sayfa';
+  const revizyon = paketRevizyonOzeti(paket.revizyon);
+  paketDugumu.append(ust, sekmeler, sayfa, ...(revizyon ? [revizyon] : []));
+  sekmeyiAc(acikSekme);
+
+  if (yeni) {
+    paketDugumu.classList.add('aciliyor');
+    requestAnimationFrame(() => paketDugumu?.classList.remove('aciliyor'));
+  }
+  if (!paketEscapeKuruldu) {
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && paketDugumu && !document.querySelector('.modal-arka, .ayarlar-arka')) lansmanPaketiKapat();
+    });
+    paketEscapeKuruldu = true;
+  }
+  return paketDugumu;
+}
+
 // ---------------- Odak sayacı ----------------
 let odakZamani = null;
 export function odakSayaci(bitis) {

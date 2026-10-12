@@ -1,3 +1,13 @@
 node_modules/
 data/
 .DS_Store
+.next/
+.sites-runtime/
+.vinext/
+.wrangler/
+dist/
+.env*
+next-env.d.ts
+*.tsbuildinfo
+.vercel/
+web-dist/

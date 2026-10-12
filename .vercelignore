@@ -1,0 +1,13 @@
+.claude/
+.env*
+.git/
+data/
+dist/
+node_modules/
+test/
+.next/
+.sites-runtime/
+.vinext/
+.wrangler/
+web-dist/
+*.tsbuildinfo

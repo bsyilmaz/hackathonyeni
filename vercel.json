@@ -1,0 +1,9 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "installCommand": "node -e \"console.log('No dependency install needed for the static demo')\"",
+  "buildCommand": "npm run build:web",
+  "outputDirectory": "web-dist",
+  "cleanUrls": true,
+  "trailingSlash": false
+}

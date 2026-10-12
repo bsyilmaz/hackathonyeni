@@ -2,11 +2,15 @@ import { maskotSVG } from './maskot.js';
 import * as B from './bilesenler.js';
 
 // Electron dışında (tarayıcıda önizleme) sahte köprü kullanılır.
+const tarayiciOnizleme = !window.kadroApi;
 const api = window.kadroApi || (await import('./sahte.js')).sahteApi();
+const ILK_DEMO_KOMUTU = 'Bu uygulamayı cuma günü tanıtacağım. İngilizce LinkedIn paylaşımı, tanıtım görseli ve lansman planı hazırla.';
+const REVIZYON_DEMO_KOMUTU = 'Lansmanı pazartesiye taşı, metni daha profesyonel yap, görsel aynı kalsın.';
 
 const $ = (s) => document.querySelector(s);
 const durum = {
   ajanlar: [],
+  temelAjanlar: [],
   el: new Map(), // ajanId -> { kok, agiz }
   kuyruk: [],
   caliyor: false,
@@ -42,11 +46,188 @@ function ciz() {
     kok.style.setProperty('--renk', a.renk);
     kok.style.setProperty('--gecikme', `${-i * 0.7}s`);
     kok.title = `${a.name}: ${a.rol}\nTıkla, sıradaki sözün doğrudan ${a.name}'e gitsin.`;
-    kok.innerHTML = `${maskotSVG(a.gorunum)}<div class="baloncuk"><i></i><i></i><i></i></div><div class="isim">${a.name}</div>`;
+    kok.innerHTML = `${maskotSVG(a.gorunum)}<div class="baloncuk"><i></i><i></i><i></i></div>`;
+    const isim = document.createElement('div');
+    isim.className = 'isim';
+    isim.textContent = a.name;
+    kok.appendChild(isim);
     kok.addEventListener('click', () => hedefSec(a.id));
     kadro.appendChild(kok);
     durum.el.set(a.id, { kok, agiz: kok.querySelector('.agiz-acik'), bebek: kok.querySelector('.goz-bebek') });
   });
+}
+
+// ---------------- Tarayıcı demosu: kişisel kadro ----------------
+const WEB_KADRO_ANAHTARI = 'ai-kadrom.web-kadro.v1';
+const OZEL_GORUNUMLER = [
+  { ten: '#d9a77f', sac: '#251b18', sacStili: 'uzun', kiyafet: '#2f6f68', aksesuar: 'gozluk', vurgu: '#ffc43d' },
+  { ten: '#f0c39d', sac: '#3b2419', sacStili: 'kisa', kiyafet: '#a8323e', aksesuar: 'kulaklik', vurgu: '#9fd3c7' },
+  { ten: '#c98f68', sac: '#17120f', sacStili: 'bere', kiyafet: '#31558a', aksesuar: '', vurgu: '#e6a93d' },
+];
+let webKadroTaslagi = null;
+
+function webKadroBos() {
+  return { pasif: [], ozeller: [] };
+}
+
+function webKadroOku() {
+  try {
+    const veri = JSON.parse(localStorage.getItem(WEB_KADRO_ANAHTARI) || 'null');
+    if (!veri || !Array.isArray(veri.pasif) || !Array.isArray(veri.ozeller)) return webKadroBos();
+    return {
+      pasif: veri.pasif.filter((id) => typeof id === 'string'),
+      ozeller: veri.ozeller
+        .filter((a) => a && typeof a.id === 'string' && typeof a.name === 'string' && typeof a.rol === 'string')
+        .slice(0, 3)
+        .map((a) => ({
+          id: a.id,
+          name: a.name.slice(0, 32),
+          rol: a.rol.slice(0, 100),
+          skills: Array.isArray(a.skills) ? a.skills.filter((s) => typeof s === 'string').map((s) => s.slice(0, 80)).slice(0, 12) : [],
+        })),
+    };
+  } catch {
+    return webKadroBos();
+  }
+}
+
+function ozelAjaniHazirla(a, sira) {
+  const gorunum = OZEL_GORUNUMLER[sira % OZEL_GORUNUMLER.length];
+  const skills = a.skills.length ? a.skills : ['Genel destek'];
+  return {
+    ...a,
+    ozel: true,
+    renk: gorunum.kiyafet,
+    gorunum,
+    ses: { ad: 'tr-TR-AhmetNeural', hiz: '+0%', perde: '+0Hz', yerel: 5 },
+    rol: `${a.rol} Skill'ler: ${skills.join(', ')}.`,
+    skills,
+    yonlendirici: false,
+  };
+}
+
+function webKadroyuUygula(ayar = webKadroOku()) {
+  if (!tarayiciOnizleme) return;
+  const pasif = new Set(ayar.pasif);
+  durum.ajanlar = [
+    ...durum.temelAjanlar.filter((a) => !pasif.has(a.id)),
+    ...ayar.ozeller.filter((a) => !pasif.has(a.id)).map(ozelAjaniHazirla),
+  ];
+  durum.hedef = durum.ajanlar.some((a) => a.id === durum.hedef) ? durum.hedef : null;
+  ciz();
+  gozKirp();
+}
+
+function kadroEditorDurumu(metin, hata = false) {
+  const alan = $('#kadroEditorDurum');
+  alan.textContent = metin;
+  alan.classList.toggle('hata', hata);
+}
+
+function kadroEditorListeleriniCiz() {
+  const hazirListe = $('#hazirAjanListesi');
+  const ozelListe = $('#ozelAjanListesi');
+  hazirListe.replaceChildren();
+  ozelListe.replaceChildren();
+  const pasif = new Set(webKadroTaslagi.pasif);
+
+  for (const ajan of durum.temelAjanlar) {
+    const satir = document.createElement('label');
+    satir.className = `kadro-editor-satiri${pasif.has(ajan.id) ? ' pasif' : ''}`;
+    const secim = document.createElement('input');
+    secim.type = 'checkbox';
+    secim.checked = !pasif.has(ajan.id);
+    secim.dataset.ajan = ajan.id;
+    secim.addEventListener('change', () => {
+      const kume = new Set(webKadroTaslagi.pasif);
+      if (secim.checked) kume.delete(ajan.id);
+      else kume.add(ajan.id);
+      webKadroTaslagi.pasif = [...kume];
+      satir.classList.toggle('pasif', !secim.checked);
+    });
+    const bilgi = document.createElement('span');
+    const ad = document.createElement('strong');
+    ad.textContent = ajan.name;
+    const rol = document.createElement('small');
+    rol.textContent = ajan.rol;
+    bilgi.append(ad, rol);
+    const durumMetni = document.createElement('span');
+    durumMetni.className = 'kadro-editor-durum';
+    durumMetni.textContent = secim.checked ? 'Sahnede' : 'Pasif';
+    secim.addEventListener('change', () => (durumMetni.textContent = secim.checked ? 'Sahnede' : 'Pasif'));
+    satir.append(secim, bilgi, durumMetni);
+    hazirListe.append(satir);
+  }
+
+  for (const ajan of webKadroTaslagi.ozeller) {
+    const satir = document.createElement('div');
+    satir.className = 'kadro-editor-satiri';
+    const bilgi = document.createElement('span');
+    const ad = document.createElement('strong');
+    ad.textContent = ajan.name;
+    const rol = document.createElement('small');
+    rol.textContent = `${ajan.rol} · ${ajan.skills.join(', ') || 'Skill etiketi yok'}`;
+    bilgi.append(ad, rol);
+    const sil = document.createElement('button');
+    sil.type = 'button';
+    sil.className = 'kadro-editor-buton tehlike';
+    sil.textContent = 'Kaldır';
+    sil.setAttribute('aria-label', `${ajan.name} karakterini kaldır`);
+    sil.onclick = () => {
+      webKadroTaslagi.ozeller = webKadroTaslagi.ozeller.filter((a) => a.id !== ajan.id);
+      kadroEditorListeleriniCiz();
+      kadroEditorDurumu(`${ajan.name} taslaktan kaldırıldı. Kaydedince sahne güncellenecek.`);
+    };
+    satir.append(bilgi, sil);
+    ozelListe.append(satir);
+  }
+
+  if (!webKadroTaslagi.ozeller.length) {
+    const bos = document.createElement('p');
+    bos.textContent = 'Henüz özel karakter eklenmedi.';
+    ozelListe.append(bos);
+  }
+}
+
+function kadroEditorAc() {
+  webKadroTaslagi = structuredClone(webKadroOku());
+  kadroEditorListeleriniCiz();
+  kadroEditorDurumu('Skill alanları bu demoda yalnızca güvenli metin etiketleridir; harici kod çalıştırılmaz.');
+  $('#kadroEditor').hidden = false;
+  $('#ozelAjanAdi').focus();
+}
+
+function kadroEditorKapat() {
+  $('#kadroEditor').hidden = true;
+  webKadroTaslagi = null;
+  $('#ayarBtn').focus();
+}
+
+function yeniOzelAjanEkle() {
+  if (webKadroTaslagi.ozeller.length >= 3) {
+    kadroEditorDurumu('Web demosunda en fazla 3 özel karakter eklenebilir.', true);
+    return;
+  }
+  const name = $('#ozelAjanAdi').value.trim();
+  const rol = $('#ozelAjanRolu').value.trim();
+  const hazirSkills = [...document.querySelectorAll('input[name="ozelSkill"]:checked')].map((e) => e.value);
+  const ozelSkills = $('#ozelSkillMetni').value
+    .split(/\r?\n|,/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const skills = [...new Set([...hazirSkills, ...ozelSkills])].slice(0, 12);
+  if (!name || !rol || !skills.length) {
+    kadroEditorDurumu('Ad, rol ve en az bir skill etiketi gerekli.', true);
+    return;
+  }
+  const kimlik = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  webKadroTaslagi.ozeller.push({ id: `ozel-${kimlik}`, name: name.slice(0, 32), rol: rol.slice(0, 100), skills });
+  $('#ozelAjanAdi').value = '';
+  $('#ozelAjanRolu').value = '';
+  $('#ozelSkillMetni').value = '';
+  document.querySelectorAll('input[name="ozelSkill"]').forEach((e) => (e.checked = false));
+  kadroEditorListeleriniCiz();
+  kadroEditorDurumu(`${name} taslağa eklendi. Kaydettiğinde sahnede görünecek.`);
 }
 
 function hedefSec(id) {
@@ -56,9 +237,12 @@ function hedefSec(id) {
   ipucu(a ? `Sıradaki sözün ${a.name}'e gidecek` : 'Boşluk tuşuna basılı tut ve konuş');
 }
 
+let gozKirpSurumu = 0;
 function gozKirp() {
+  const surum = ++gozKirpSurumu;
   for (const { kok } of durum.el.values()) {
     const kirp = () => {
+      if (surum !== gozKirpSurumu || !kok.isConnected) return;
       kok.classList.add('kirp');
       setTimeout(() => kok.classList.remove('kirp'), 140);
       setTimeout(kirp, 2200 + Math.random() * 4500);
@@ -252,11 +436,98 @@ let parcalar = [];
 let kayitBaslangici = 0;
 let seviyeDongusu = null;
 let ornekleyici = null;
+let tarayiciTaniyici = null;
+let tarayiciKayitBildirildi = false;
+
+function kayitGorunumunuKapat() {
+  durum.kayit = false;
+  $('#mikrofon').classList.remove('kayit', 'isleniyor');
+  $('#kadro').classList.remove('dinliyor');
+}
+
+function yaziGirdisiniAc() {
+  const form = $('#yaziFormu');
+  form.hidden = false;
+  $('#klavyeBtn').classList.add('aktif');
+  document.body.classList.add('yazi-acik');
+  $('#yaziGirdisi').focus();
+}
+
+function tarayiciKayitBasla() {
+  const Taniyici = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!Taniyici) {
+    durum.basiliTut = false;
+    yaziGirdisiniAc();
+    ipucu('Bu tarayıcı ses tanımayı desteklemiyor; komutu yazarak gönderebilirsin');
+    if (!tarayiciKayitBildirildi) {
+      tarayiciKayitBildirildi = true;
+      B.bildirim({ tur: 'bilgi', baslik: 'Ses girişi kullanılamıyor', metin: 'Klavye düğmesindeki hazır komutu Enter ile gönderebilirsin.', sure: 6500 });
+    }
+    return;
+  }
+
+  sozuKes();
+  const taniyici = new Taniyici();
+  tarayiciTaniyici = taniyici;
+  let metin = '';
+  let hata = null;
+  let tamamlandi = false;
+  taniyici.lang = 'tr-TR';
+  taniyici.continuous = false;
+  taniyici.interimResults = true;
+  taniyici.maxAlternatives = 1;
+  taniyici.onresult = (e) => {
+    let gecici = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const parca = e.results[i][0]?.transcript || '';
+      if (e.results[i].isFinal) metin += `${parca} `;
+      else gecici += parca;
+    }
+    const duyulan = `${metin}${gecici}`.trim();
+    if (duyulan) ipucu(`Duydum: ${duyulan}`);
+  };
+  taniyici.onerror = (e) => {
+    hata = e.error;
+  };
+  taniyici.onend = () => {
+    if (tamamlandi) return;
+    tamamlandi = true;
+    tarayiciTaniyici = null;
+    kayitGorunumunuKapat();
+    const sonuc = metin.trim();
+    if (sonuc) {
+      B.duyulanGoster(sonuc);
+      gonder(sonuc);
+      return;
+    }
+    if (hata === 'not-allowed' || hata === 'service-not-allowed') {
+      B.bildirim({ tur: 'hata', baslik: 'Mikrofon izni yok', metin: 'Tarayıcının adres çubuğundan mikrofon izni verebilir ya da komutu yazabilirsin.', sure: 8000 });
+    }
+    ipucu('Ses anlaşılmadı; klavye düğmesindeki komutu deneyebilirsin');
+  };
+
+  durum.kayit = true;
+  kayitBaslangici = Date.now();
+  $('#mikrofon').classList.add('kayit');
+  $('#kadro').classList.add('dinliyor');
+  ipucu('Dinliyorum…');
+  try {
+    taniyici.start();
+  } catch (e) {
+    tarayiciTaniyici = null;
+    kayitGorunumunuKapat();
+    B.bildirim({ tur: 'hata', baslik: 'Ses girişi başlatılamadı', metin: e.message, sure: 6000 });
+  }
+}
 
 async function kayitBasla() {
   if (durum.kayit) return;
   durum.basiliTut = true;
   baglam();
+  if (tarayiciOnizleme) {
+    tarayiciKayitBasla();
+    return;
+  }
   sozuKes();
   api.kulakHazirla?.(); // uykudaysa Whisper sen konuşurken açılsın
   try {
@@ -302,6 +573,12 @@ function seviyeGoster() {
 async function kayitBitir() {
   durum.basiliTut = false;
   if (!durum.kayit) return;
+  if (tarayiciOnizleme) {
+    try {
+      tarayiciTaniyici?.stop();
+    } catch {}
+    return;
+  }
   durum.kayit = false;
   cancelAnimationFrame(seviyeDongusu);
   $('#mikrofon').classList.remove('kayit');
@@ -339,14 +616,15 @@ function gonder(metin) {
     metin = `${a.name}, ${metin}`;
     hedefSec(null);
   }
-  ipucu('Boşluk tuşuna basılı tut ve konuş');
-  api.konus(metin);
+  ipucu(tarayiciOnizleme ? 'Ekip çalışıyor…' : 'Boşluk tuşuna basılı tut ve konuş');
+  const ozelBaglam = tarayiciOnizleme && a?.ozel ? { ozelAjan: { id: a.id, name: a.name, rol: a.rol, skills: a.skills } } : undefined;
+  api.konus(metin, ozelBaglam);
 }
 
 const yaziAlaniMi = () => ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName);
 
 window.addEventListener('keydown', (e) => {
-  if (e.code === 'Space' && !e.repeat && !yaziAlaniMi() && $('#ayarlar').hidden) {
+  if (e.code === 'Space' && !e.repeat && !yaziAlaniMi() && $('#ayarlar').hidden && $('#kadroEditor').hidden) {
     e.preventDefault();
     kayitBasla();
   }
@@ -356,6 +634,10 @@ window.addEventListener('keydown', (e) => {
     return;
   }
   if (e.key === 'Escape') {
+    if (tarayiciOnizleme && !$('#kadroEditor').hidden) {
+      kadroEditorKapat();
+      return;
+    }
     if (document.querySelector('.palet-arka')) return B.paletKapat();
     susdur();
     api.iptal?.();
@@ -533,6 +815,10 @@ function modelDurumuYaz(modeller) {
 }
 
 $('#ayarBtn').onclick = async () => {
+  if (tarayiciOnizleme) {
+    kadroEditorAc();
+    return;
+  }
   durum.ayarlar = await api.ayarlar();
   ayarlariDoldur(durum.ayarlar);
   $('#ayarlar').hidden = false;
@@ -541,6 +827,32 @@ $('#ayarKapat').onclick = () => ($('#ayarlar').hidden = true);
 $('#ayarlar').addEventListener('click', (e) => {
   if (e.target.id === 'ayarlar') $('#ayarlar').hidden = true;
 });
+$('#kadroEditorKapat').onclick = kadroEditorKapat;
+$('#kadroEditor').addEventListener('click', (e) => {
+  if (e.target.id === 'kadroEditor') kadroEditorKapat();
+});
+$('#ozelAjanEkle').onclick = yeniOzelAjanEkle;
+$('#kadroEditorSifirla').onclick = () => {
+  webKadroTaslagi = webKadroBos();
+  kadroEditorListeleriniCiz();
+  kadroEditorDurumu('Varsayılan altı kişilik kadro taslağa geri alındı. Uygulamak için kaydet.');
+};
+$('#kadroEditorKaydet').onclick = () => {
+  const etkinHazir = durum.temelAjanlar.filter((a) => !webKadroTaslagi.pasif.includes(a.id)).length;
+  if (!etkinHazir && !webKadroTaslagi.ozeller.length) {
+    kadroEditorDurumu('Sahnede en az bir karakter kalmalı.', true);
+    return;
+  }
+  try {
+    localStorage.setItem(WEB_KADRO_ANAHTARI, JSON.stringify(webKadroTaslagi));
+  } catch {
+    kadroEditorDurumu('Tarayıcı kadro tercihini kaydedemedi.', true);
+    return;
+  }
+  webKadroyuUygula(webKadroTaslagi);
+  kadroEditorKapat();
+  B.bildirim({ tur: 'basari', baslik: 'Kadro güncellendi', metin: `${durum.ajanlar.length} karakter sahnede. Skill manifestleri yalnızca bu tarayıcıda saklanıyor.`, sure: 5000 });
+};
 $('#kodDunyasiSec').onclick = async () => {
   try {
     const yol = await api.kodDunyasiSec();
@@ -630,9 +942,10 @@ function olayIsle(o) {
       break;
     }
     case 'gorev-verildi': {
-      const k = durum.ajanlar.find((x) => x.id === o.kimden);
-      const h = durum.ajanlar.find((x) => x.id === o.kime);
-      B.bildirim({ ajan: o.kime, baslik: 'Ekip içi görev', metin: `${k?.name} bir iş verdi, ${h?.name} sırada.`, sure: 4000 });
+      const ajanBul = (id) => durum.ajanlar.find((x) => x.id === id) || durum.temelAjanlar.find((x) => x.id === id);
+      const k = ajanBul(o.kimden);
+      const h = ajanBul(o.kime);
+      B.bildirim({ ajan: o.kime, baslik: 'Ekip içi görev', metin: `${k?.name || o.kimden || 'Ekip'} bir iş verdi, ${h?.name || o.kime || 'uzman'} sırada.`, sure: 4000 });
       dusunuyor(o.kime, true);
       break;
     }
@@ -645,6 +958,23 @@ function olayIsle(o) {
     case 'gorsel':
       B.gorselBildirim(o);
       break;
+    case 'lansman-paketi': {
+      const paket = o.paket || o;
+      if (typeof B.lansmanPaketiGoster === 'function') B.lansmanPaketiGoster(paket);
+      else B.bildirim({ tur: 'basari', baslik: 'Lansman paketi hazır', metin: 'Paylaşım, görsel ve plan birlikte hazırlandı.', sure: 6000 });
+      if (tarayiciOnizleme) {
+        const girdi = $('#yaziGirdisi');
+        yaziGirdisiniAc();
+        if (paket.surum === 'v1' && !girdi.value.trim()) {
+          girdi.value = REVIZYON_DEMO_KOMUTU;
+          girdi.setSelectionRange(0, 0);
+          ipucu('İkinci tur hazır: revizyonu göndermek için Enter’a bas');
+        } else if (paket.surum === 'v2') {
+          ipucu('Revizyon tamam: metin ve plan güncellendi, görsel korundu');
+        }
+      }
+      break;
+    }
     case 'model-durum': {
       durum.modeller = { ...(durum.modeller || {}), [o.model]: o };
       if (!$('#ayarlar').hidden) modelDurumuYaz(durum.modeller);
@@ -748,13 +1078,31 @@ async function mikrofonTesti(seviye) {
 }
 
 async function basla() {
-  durum.ajanlar = await api.kadro();
-  ciz();
+  durum.temelAjanlar = await api.kadro();
+  if (tarayiciOnizleme) webKadroyuUygula();
+  else {
+    durum.ajanlar = durum.temelAjanlar;
+    ciz();
+  }
   gozKirp();
   durum.ayarlar = await api.ayarlar();
   durum.altyazi = !!durum.ayarlar.altyazi;
   $('#altyaziBtn').classList.toggle('aktif', durum.altyazi);
   api.olay(olayIsle);
+  if (tarayiciOnizleme) {
+    const form = $('#yaziFormu');
+    const girdi = $('#yaziGirdisi');
+    form.hidden = false;
+    $('#klavyeBtn').classList.add('aktif');
+    document.body.classList.add('yazi-acik');
+    girdi.value = ILK_DEMO_KOMUTU;
+    girdi.placeholder = 'Ekibe bir hedef yaz…';
+    girdi.setAttribute('aria-label', 'AI ekibine verilecek hedef');
+    $('.kisayol-ipucu').textContent = 'WEB DEMOSU · örnek veriler kullanılır, hiçbir şey yayımlanmaz';
+    ipucu('Hazır hedefi ekibe vermek için Enter’a bas');
+    $('#ayarBtn').title = 'Kadronu düzenle';
+    $('#ayarBtn').setAttribute('aria-label', 'Kadronu düzenle');
+  }
   for (const k of await api.onaylar()) B.onayKarti(k);
   B.gununIsiNotu(await api.gununIsi?.(), gununIsiTamamla);
   const odak = await api.odak?.();

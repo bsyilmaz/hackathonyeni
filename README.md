@@ -2,6 +2,36 @@
 
 Bilgisayarında sesli konuştuğun, maskotlu kişisel asistan ekibi. Beyin: DeepSeek API. Kulak, hafıza ve yönlendirme: bilgisayarında çalışan ücretsiz yerel modeller.
 
+## Canlı web demosu
+
+[AI Kadrom'u tarayıcıda aç](https://bsyilmaz.github.io/hackathonyeni/)
+
+Hackathon demosu, solo girişimcinin tek bir hedefini koordineli bir lansman çalışmasına dönüştürür. Defne hedefi anlar ve işleri dağıtır; Kerem ürünün gerçek özelliklerini çıkarır, Mert İngilizce LinkedIn metnini ve görseli hazırlar, Elif lansman planını tarihlendirir. Kullanıcı daha sonra “Lansmanı pazartesiye taşı, metni daha profesyonel yap, görsel aynı kalsın” diyebilir; yalnızca ilgili çıktılar güncellenir ve korunan içerik açıkça gösterilir.
+
+Web sürümü, masaüstü uygulamasının özgün tiyatro sahnesini ve karakter dilini koruyan etkileşimli bir demodur. Örnek/simüle edilmiş veriler kullanır; sosyal medya gönderilerini otomatik yayımlamaz. Yerel model, dosya sistemi, işletim sistemi ve arka plan hatırlatma özellikleri için Electron masaüstü uygulamasını kullanın.
+
+### Web demosunu yerelde çalıştırma
+
+```bash
+npm run build:web
+```
+
+Ardından `web-dist/` klasörünü herhangi bir statik dosya sunucusuyla açın. GitHub Pages iş akışı repoda hazırdır; ilgili dal gönderildiğinde canlı demo otomatik yayımlanır.
+
+### Vercel ile yayımlama
+
+Repoyu Vercel'e Git üzerinden içe aktarırken şu ayarları kullanın:
+
+- Framework Preset: `Other`
+- Build Command: `npm run build:web`
+- Output Directory: `web-dist`
+
+`vercel.json` bu ayarlarla hazırdır.
+
+## Kadronu Düzenle
+
+Web demosunda herkes kendi çalışma kadrosunu kurabilir: yeni bir karakter ekleyebilir, adını ve rolünü belirleyebilir, skill manifestleri yükleyebilir ve varsayılan ajanları etkinleştirip devre dışı bırakabilir. Düzenlemeler tarayıcıdaki `localStorage` alanında saklanır ve bu cihazda kalır. Güvenlik için yüklenen manifestler yalnızca tanımlı veri olarak okunur; keyfi kod çalıştırılmaz.
+
 ## Başlatma
 `AI Kadrom.command` dosyasına çift tıkla (ya da terminalde `npm start`). İlk açılışta ⚙️ ayarlardan **DeepSeek API anahtarını** gir.
 
