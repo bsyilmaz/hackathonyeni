@@ -1,0 +1,24 @@
+{
+  "name": "ai-kadrom",
+  "productName": "AI Kadrom",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Sesli konuşan, maskotlu kişisel AI asistan ekibi (DeepSeek)",
+  "main": "src/main/main.js",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test --test-force-exit test/*.test.js"
+  },
+  "dependencies": {
+    "@fontsource/baloo-2": "^5.3.0",
+    "@fontsource/rubik": "^5.3.0",
+    "@huggingface/transformers": "^4.3.0",
+    "msedge-tts": "^2.0.8",
+    "pdfjs-dist": "^6.3.289",
+    "sherpa-onnx-node": "^1.13.8",
+    "tesseract.js": "^7.0.0"
+  },
+  "devDependencies": {
+    "electron": "^44.5.1"
+  }
+}

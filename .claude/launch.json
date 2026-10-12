@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "onizleme",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["/private/tmp/claude-501/-Users-bayramselimyilmaz-Desktop-aikadrosuasistanlar-m/34d4b7ff-cabd-4e3f-bbb0-b73e99956f6f/scratchpad/sunucu.js", "/Users/bayramselimyilmaz/Desktop/aikadrosuasistanlarım"],
+      "port": 5317
+    }
+  ]
+}
